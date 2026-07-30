@@ -105,6 +105,7 @@ nav button:hover { color: var(--text); border-color: var(--chrome); }
 }
 .rt-title { font-family: 'Rajdhani'; font-weight: 700; font-size: 20px; color: var(--gold); }
 .rt-items { display: flex; gap: 14px; justify-content: center; margin-top: 6px; font-family: 'Rajdhani'; font-weight: 700; font-size: 15px; }
+.rt-items span { display: inline-flex; align-items: center; gap: 5px; }
 
 main { max-width: 1100px; margin: 0 auto; padding: 28px 20px; }
 
@@ -178,6 +179,56 @@ input[type=file] { display: none; }
 .empty {
   color: var(--muted); text-align: center; padding: 60px 20px; border: 1px dashed var(--line);
   border-radius: 12px; font-family: 'Rajdhani'; font-size: 15px;
+}
+
+/* --- Progreso / camino de niveles --- */
+.road-wrap {
+  position: relative;
+  padding: 30px 10px 60px;
+  background:
+    repeating-linear-gradient(180deg, transparent 0 46px, rgba(255,255,255,0.035) 46px 48px),
+    radial-gradient(ellipse at 50% 0%, #202024, #0e0e10 70%);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  overflow: hidden;
+}
+.road-line {
+  position: absolute; top: 0; bottom: 0; left: 50%; width: 6px; transform: translateX(-50%);
+  background: repeating-linear-gradient(180deg, #3a3a40 0 22px, transparent 22px 40px);
+  border-radius: 4px;
+  opacity: 0.8;
+}
+.road-node { position: relative; display: flex; margin-bottom: 26px; z-index: 1; }
+.road-node.left { justify-content: flex-start; padding-right: 52%; }
+.road-node.right { justify-content: flex-end; padding-left: 52%; }
+
+.road-node-card {
+  width: 72px; background: var(--panel); border: 2px solid var(--line); border-radius: 14px;
+  padding: 10px 6px 8px; text-align: center; position: relative;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+}
+.road-node-card.done { border-color: #1f6b3a; background: linear-gradient(160deg, var(--panel), #12241a); }
+.road-node-card.current {
+  border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim), 0 0 18px rgba(255,61,46,0.4);
+  transform: scale(1.12);
+}
+.road-node-card.locked { opacity: 0.5; }
+
+.road-node-level { font-family: 'Rajdhani'; font-weight: 700; font-size: 18px; }
+.road-node-reward {
+  display: flex; align-items: center; gap: 3px; font-family: 'Rajdhani'; font-weight: 700; font-size: 11px;
+  background: var(--panel-2); border-radius: 10px; padding: 2px 6px;
+}
+.road-check { position: absolute; top: -10px; right: -8px; }
+.road-lock { opacity: 0.8; }
+.road-node-ring {
+  width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--panel-2);
+  position: relative; overflow: hidden; background: var(--panel-2);
+}
+.road-node-ring-fill {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: linear-gradient(0deg, var(--gold), var(--accent));
+  transition: height .4s ease;
 }
 
 footer { text-align: center; color: var(--muted); font-size: 11px; padding: 30px 20px 10px; letter-spacing: .05em; }

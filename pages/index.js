@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import Head from 'next/head';
 import { supabase } from '../lib/supabaseClient';
 import { BRANDS, MODELS, ICONIC_LINKS, ICONIC_EXTRA } from '../lib/carsData';
-import { grantCarXp, xpNeededForLevel } from '../lib/xpSystem';
+import { grantCarXp, xpNeededForLevel, rewardForLevel } from '../lib/xpSystem';
+import { CoinIcon, KeyCommonIcon, KeyEpicIcon, KeyLegendaryIcon, LockIcon, CheckIcon } from '../lib/icons';
 
 export default function Home() {
   const [session, setSession] = useState(undefined); // undefined = cargando, null = sin sesión
@@ -204,6 +205,7 @@ function App({ session }) {
         </div>
         <nav>
           <button className={view === 'marcas' ? 'active' : ''} onClick={() => { setView('marcas'); }}>Marcas</button>
+          <button className={view === 'progreso' ? 'active' : ''} onClick={() => { setView('progreso'); goBrandsRoot(); }}>Progreso</button>
           <button className={view === 'iconicos' ? 'active' : ''} onClick={() => { setView('iconicos'); goBrandsRoot(); }}>Icónicos</button>
           <button className={view === 'garaje' ? 'active' : ''} onClick={() => { setView('garaje'); goBrandsRoot(); }}>Garaje</button>
         </nav>
@@ -230,6 +232,7 @@ function App({ session }) {
           />
         )}
         {view === 'iconicos' && <IconicosView garage={garage} />}
+        {view === 'progreso' && profile && <ProgresoView profile={profile} />}
         {view === 'garaje' && <GarajeView garage={garage} />}
       </main>
 
@@ -363,10 +366,10 @@ function Hud({ profile }) {
   return (
     <div className="hud">
       <div className="hud-row">
-        <div className="hud-chip coins">🪙 <span>{profile.coins}</span></div>
-        <div className="hud-chip key-common">🔑 <span>{profile.keys_common}</span></div>
-        <div className="hud-chip key-epic">🔮 <span>{profile.keys_epic}</span></div>
-        <div className="hud-chip key-legendary">🏆 <span>{profile.keys_legendary}</span></div>
+        <div className="hud-chip coins"><CoinIcon /> <span>{profile.coins}</span></div>
+        <div className="hud-chip key-common"><KeyCommonIcon /> <span>{profile.keys_common}</span></div>
+        <div className="hud-chip key-epic"><KeyEpicIcon /> <span>{profile.keys_epic}</span></div>
+        <div className="hud-chip key-legendary"><KeyLegendaryIcon /> <span>{profile.keys_legendary}</span></div>
       </div>
       <div className="hud-xp">
         <div className="hud-level-badge">{profile.level}</div>
@@ -389,12 +392,58 @@ function RewardToast({ toast }) {
     <div className="reward-toast">
       <div className="rt-title">¡Nivel {finalLevel}! 🎉</div>
       <div className="rt-items">
-        <span>🪙 +{totalCoins}</span>
-        {totalKeysCommon > 0 && <span>🔑 +{totalKeysCommon}</span>}
-        {totalKeysEpic > 0 && <span>🔮 +{totalKeysEpic}</span>}
-        {totalKeysLegendary > 0 && <span>🏆 +{totalKeysLegendary}</span>}
+        <span><CoinIcon size={16} /> +{totalCoins}</span>
+        {totalKeysCommon > 0 && <span><KeyCommonIcon size={16} /> +{totalKeysCommon}</span>}
+        {totalKeysEpic > 0 && <span><KeyEpicIcon size={16} /> +{totalKeysEpic}</span>}
+        {totalKeysLegendary > 0 && <span><KeyLegendaryIcon size={16} /> +{totalKeysLegendary}</span>}
       </div>
     </div>
+  );
+}
+
+/* ---------------- PROGRESO: camino de niveles tipo Brawl, ambientado con coches ---------------- */
+function ProgresoView({ profile }) {
+  const totalToShow = Math.max(profile.level + 12, 20);
+  const levels = Array.from({ length: totalToShow }, (_, i) => i + 1);
+  const needed = xpNeededForLevel(profile.level);
+  const pct = Math.min(100, Math.round((profile.xp / needed) * 100));
+
+  return (
+    <>
+      <div className="section-title">
+        <span className="num">🏁</span><h2>Carretera del cazador</h2>
+        <p>Nivel {profile.level} · {profile.xp}/{needed} XP</p>
+      </div>
+      <div className="road-wrap">
+        <div className="road-line" />
+        {levels.map((lvl) => {
+          const reward = rewardForLevel(lvl);
+          const status = lvl < profile.level ? 'done' : lvl === profile.level ? 'current' : 'locked';
+          const side = lvl % 2 === 0 ? 'right' : 'left';
+          return (
+            <div className={`road-node ${side}`} key={lvl}>
+              <div className={`road-node-card ${status}`}>
+                {status === 'done' && <div className="road-check"><CheckIcon size={16} /></div>}
+                <div className="road-node-level">{lvl}</div>
+                {status === 'current' && (
+                  <div className="road-node-ring">
+                    <div className="road-node-ring-fill" style={{ height: pct + '%' }} />
+                  </div>
+                )}
+                {status === 'locked' && <div className="road-lock"><LockIcon size={16} /></div>}
+                <div className="road-node-reward">
+                  {reward.keys_legendary > 0 ? <KeyLegendaryIcon size={16} /> :
+                   reward.keys_epic > 0 ? <KeyEpicIcon size={16} /> :
+                   reward.keys_common > 0 ? <KeyCommonIcon size={16} /> :
+                   <CoinIcon size={16} />}
+                  <span>{reward.keys_legendary > 0 ? 1 : reward.keys_epic > 0 ? 1 : reward.keys_common > 0 ? 1 : reward.coins}</span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
