@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import Head from 'next/head';
 import { supabase } from '../lib/supabaseClient';
 import { BRANDS, MODELS, ICONIC_LINKS, ICONIC_EXTRA } from '../lib/carsData';
-import { grantCarXp, xpNeededForLevel, rewardForLevel } from '../lib/xpSystem';
+import { grantCarXp, grantXp, xpNeededForLevel, rewardForLevel } from '../lib/xpSystem';
 import { CoinIcon, KeyCommonIcon, KeyEpicIcon, KeyLegendaryIcon, LockIcon, CheckIcon } from '../lib/icons';
+import { MISSIONS } from '../lib/missions';
 
 export default function Home() {
   const [session, setSession] = useState(undefined); // undefined = cargando, null = sin sesión
@@ -89,11 +90,55 @@ function App({ session }) {
   const [uploading, setUploading] = useState(false);
   const [profile, setProfile] = useState(null); // { level, xp, coins, keys_common, keys_epic, keys_legendary }
   const [rewardToast, setRewardToast] = useState(null); // { xpGained, levelUps }
+  const [claimedMissions, setClaimedMissions] = useState({}); // { missionId: true }
 
   useEffect(() => {
     loadGarage();
     loadProfile();
+    loadClaimedMissions();
   }, []);
+
+  async function loadClaimedMissions() {
+    const { data, error } = await supabase
+      .from('claimed_missions')
+      .select('mission_id')
+      .eq('user_id', user.id);
+    if (!error && data) {
+      const map = {};
+      data.forEach(row => { map[row.mission_id] = true; });
+      setClaimedMissions(map);
+    }
+  }
+
+  async function claimMission(mission) {
+    if (!profile || claimedMissions[mission.id]) return;
+    const { error: insertError } = await supabase
+      .from('claimed_missions')
+      .insert({ user_id: user.id, mission_id: mission.id });
+    if (insertError) return; // ya reclamada o error de red, no hacemos nada más
+
+    setClaimedMissions(prev => ({ ...prev, [mission.id]: true }));
+
+    const r = mission.reward;
+    const result = grantXp(profile, r.xp || 0);
+    const level = result.level;
+    const xp = result.xp;
+    const coins = result.coins + r.coins;
+    const keys_common = result.keys_common + r.keys_common;
+    const keys_epic = result.keys_epic + r.keys_epic;
+    const keys_legendary = result.keys_legendary + r.keys_legendary;
+
+    setProfile({ level, xp, coins, keys_common, keys_epic, keys_legendary, avatar_id: profile.avatar_id });
+    await supabase
+      .from('profiles')
+      .update({ level, xp, coins, keys_common, keys_epic, keys_legendary })
+      .eq('user_id', user.id);
+
+    if (result.levelUps.length > 0) {
+      setRewardToast({ xpGained: result.xpGained, levelUps: result.levelUps });
+      setTimeout(() => setRewardToast(null), 3500);
+    }
+  }
 
   async function loadGarage() {
     const { data, error } = await supabase
@@ -205,7 +250,7 @@ function App({ session }) {
         </div>
         <nav>
           <button className={view === 'marcas' ? 'active' : ''} onClick={() => { setView('marcas'); }}>Marcas</button>
-          <button className={view === 'progreso' ? 'active' : ''} onClick={() => { setView('progreso'); goBrandsRoot(); }}>Progreso</button>
+          <button className={view === 'misiones' ? 'active' : ''} onClick={() => { setView('misiones'); goBrandsRoot(); }}>Misiones</button>
           <button className={view === 'iconicos' ? 'active' : ''} onClick={() => { setView('iconicos'); goBrandsRoot(); }}>Icónicos</button>
           <button className={view === 'garaje' ? 'active' : ''} onClick={() => { setView('garaje'); goBrandsRoot(); }}>Garaje</button>
         </nav>
@@ -215,7 +260,7 @@ function App({ session }) {
         </div>
       </header>
 
-      {profile && <Hud profile={profile} />}
+      {profile && <Hud profile={profile} onOpenProgress={() => { setView('progreso'); goBrandsRoot(); }} />}
       {rewardToast && <RewardToast toast={rewardToast} />}
 
       <main>
@@ -232,7 +277,10 @@ function App({ session }) {
           />
         )}
         {view === 'iconicos' && <IconicosView garage={garage} />}
-        {view === 'progreso' && profile && <ProgresoView profile={profile} />}
+        {view === 'progreso' && profile && <ProgresoView profile={profile} onBack={() => setView('marcas')} />}
+        {view === 'misiones' && (
+          <MisionesView garage={garage} claimedMissions={claimedMissions} onClaim={claimMission} />
+        )}
         {view === 'garaje' && <GarajeView garage={garage} />}
       </main>
 
@@ -360,7 +408,7 @@ function IconicosView({ garage }) {
 }
 
 /* ---------------- HUD (monedas, llaves, barra de nivel) ---------------- */
-function Hud({ profile }) {
+function Hud({ profile, onOpenProgress }) {
   const needed = xpNeededForLevel(profile.level);
   const pct = Math.min(100, Math.round((profile.xp / needed) * 100));
   return (
@@ -371,13 +419,14 @@ function Hud({ profile }) {
         <div className="hud-chip key-epic"><KeyEpicIcon /> <span>{profile.keys_epic}</span></div>
         <div className="hud-chip key-legendary"><KeyLegendaryIcon /> <span>{profile.keys_legendary}</span></div>
       </div>
-      <div className="hud-xp">
+      <button className="hud-xp-banner" onClick={onOpenProgress} title="Ver progreso">
         <div className="hud-level-badge">{profile.level}</div>
         <div className="hud-xp-track">
           <div className="hud-xp-fill" style={{ width: pct + '%' }}></div>
+          <div className="hud-xp-label">{profile.xp}/{needed} XP</div>
         </div>
-        <div className="hud-xp-label">{profile.xp}/{needed} XP</div>
-      </div>
+        <div className="hud-xp-arrow">›</div>
+      </button>
     </div>
   );
 }
@@ -401,44 +450,101 @@ function RewardToast({ toast }) {
   );
 }
 
-/* ---------------- PROGRESO: camino de niveles tipo Brawl, ambientado con coches ---------------- */
-function ProgresoView({ profile }) {
+/* ---------------- PROGRESO: camino de niveles horizontal, tipo Star Park ---------------- */
+function ProgresoView({ profile, onBack }) {
   const totalToShow = Math.max(profile.level + 12, 20);
   const levels = Array.from({ length: totalToShow }, (_, i) => i + 1);
   const needed = xpNeededForLevel(profile.level);
   const pct = Math.min(100, Math.round((profile.xp / needed) * 100));
+  const wave = [0, -22, -34, -22, 0, 22, 34, 22]; // ondulación tipo camino de Brawl
 
   return (
     <>
+      <button className="back-btn" onClick={onBack}>← Volver</button>
       <div className="section-title">
         <span className="num">🏁</span><h2>Carretera del cazador</h2>
         <p>Nivel {profile.level} · {profile.xp}/{needed} XP</p>
       </div>
-      <div className="road-wrap">
-        <div className="road-line" />
-        {levels.map((lvl) => {
-          const reward = rewardForLevel(lvl);
-          const status = lvl < profile.level ? 'done' : lvl === profile.level ? 'current' : 'locked';
-          const side = lvl % 2 === 0 ? 'right' : 'left';
-          return (
-            <div className={`road-node ${side}`} key={lvl}>
-              <div className={`road-node-card ${status}`}>
-                {status === 'done' && <div className="road-check"><CheckIcon size={16} /></div>}
-                <div className="road-node-level">{lvl}</div>
-                {status === 'current' && (
-                  <div className="road-node-ring">
-                    <div className="road-node-ring-fill" style={{ height: pct + '%' }} />
+      <div className="road-park">
+        <div className="road-deco">
+          {Array.from({ length: 10 }).map((_, i) => (
+            <span className="deco-tree" key={'t' + i} style={{ left: (i * 11 + 3) + '%', top: i % 2 === 0 ? '10%' : '78%' }}>🌳</span>
+          ))}
+          {['#ff5c5c', '#5cc8ff', '#ffd75c', '#7ee08a'].map((c, i) => (
+            <span className="deco-car" key={'c' + i} style={{ left: (i * 24 + 8) + '%', top: i % 2 === 0 ? '4%' : '85%', background: c }} />
+          ))}
+        </div>
+        <div className="road-h-track">
+          <div className="road-h-line" />
+          {levels.map((lvl, i) => {
+            const reward = rewardForLevel(lvl);
+            const status = lvl < profile.level ? 'done' : lvl === profile.level ? 'current' : 'locked';
+            const offsetY = wave[i % wave.length];
+            return (
+              <div className="road-h-node" style={{ transform: `translateY(${offsetY}px)` }} key={lvl}>
+                <div className={`road-node-card ${status}`}>
+                  {status === 'done' && <div className="road-check"><CheckIcon size={16} /></div>}
+                  <div className="road-node-level">{lvl}</div>
+                  {status === 'current' && (
+                    <div className="road-node-ring">
+                      <div className="road-node-ring-fill" style={{ height: pct + '%' }} />
+                    </div>
+                  )}
+                  {status === 'locked' && <div className="road-lock"><LockIcon size={16} /></div>}
+                  <div className="road-node-reward">
+                    {reward.keys_legendary > 0 ? <KeyLegendaryIcon size={16} /> :
+                     reward.keys_epic > 0 ? <KeyEpicIcon size={16} /> :
+                     reward.keys_common > 0 ? <KeyCommonIcon size={16} /> :
+                     <CoinIcon size={16} />}
+                    <span>{reward.keys_legendary > 0 ? 1 : reward.keys_epic > 0 ? 1 : reward.keys_common > 0 ? 1 : reward.coins}</span>
                   </div>
-                )}
-                {status === 'locked' && <div className="road-lock"><LockIcon size={16} /></div>}
-                <div className="road-node-reward">
-                  {reward.keys_legendary > 0 ? <KeyLegendaryIcon size={16} /> :
-                   reward.keys_epic > 0 ? <KeyEpicIcon size={16} /> :
-                   reward.keys_common > 0 ? <KeyCommonIcon size={16} /> :
-                   <CoinIcon size={16} />}
-                  <span>{reward.keys_legendary > 0 ? 1 : reward.keys_epic > 0 ? 1 : reward.keys_common > 0 ? 1 : reward.coins}</span>
                 </div>
               </div>
+            );
+          })}
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ---------------- MISIONES ---------------- */
+function MisionesView({ garage, claimedMissions, onClaim }) {
+  return (
+    <>
+      <div className="section-title">
+        <span className="num">🎯</span><h2>Misiones</h2>
+        <p>Completa desafíos y reclama tu recompensa</p>
+      </div>
+      <div className="mission-list">
+        {MISSIONS.map((m) => {
+          const progress = Math.min(m.progress(garage), m.target);
+          const done = progress >= m.target;
+          const claimed = !!claimedMissions[m.id];
+          const pct = Math.round((progress / m.target) * 100);
+          return (
+            <div className={`mission-card ${claimed ? 'claimed' : done ? 'ready' : ''}`} key={m.id}>
+              <div className="mission-info">
+                <div className="mission-title">{m.title}</div>
+                <div className="mission-desc">{m.description}</div>
+                <div className="mission-track">
+                  <div className="mission-track-fill" style={{ width: pct + '%' }} />
+                  <span className="mission-track-label">{progress}/{m.target}</span>
+                </div>
+              </div>
+              <div className="mission-rewards">
+                <span><CoinIcon size={15} /> {m.reward.coins}</span>
+                {m.reward.keys_common > 0 && <span><KeyCommonIcon size={15} /> {m.reward.keys_common}</span>}
+                {m.reward.keys_epic > 0 && <span><KeyEpicIcon size={15} /> {m.reward.keys_epic}</span>}
+                {m.reward.keys_legendary > 0 && <span><KeyLegendaryIcon size={15} /> {m.reward.keys_legendary}</span>}
+              </div>
+              <button
+                className="mission-claim"
+                disabled={!done || claimed}
+                onClick={() => onClaim(m)}
+              >
+                {claimed ? 'Reclamada' : done ? 'Reclamar' : 'En curso'}
+              </button>
             </div>
           );
         })}
