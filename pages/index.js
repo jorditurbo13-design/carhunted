@@ -8,6 +8,7 @@ import { MISSIONS } from '../lib/missions';
 import { compressImage } from '../lib/imageCompress';
 import { VAULT_CARS, poolByTier, findVaultCar, DUPLICATE_COMPENSATION } from '../lib/vaultCars';
 import { AVATARS, findAvatar } from '../lib/avatars';
+import { ChestIdle, ChestBursting } from '../lib/chestArt';
 
 export default function Home() {
   const [session, setSession] = useState(undefined); // undefined = cargando, null = sin sesión
@@ -144,12 +145,16 @@ function App({ session }) {
     }
 
     setTimeout(() => {
-      setChestModal({ tier, phase: 'silhouette', result: { car, isDuplicate, coinsGained } });
+      setChestModal({ tier, phase: 'bursting', result: { car, isDuplicate, coinsGained } });
     }, 1300);
 
     setTimeout(() => {
+      setChestModal({ tier, phase: 'silhouette', result: { car, isDuplicate, coinsGained } });
+    }, 1750);
+
+    setTimeout(() => {
       setChestModal({ tier, phase: 'reveal', result: { car, isDuplicate, coinsGained } });
-    }, 2400);
+    }, 2750);
   }
 
   async function loadClaimedMissions() {
@@ -676,7 +681,7 @@ function CajasView({ profile, vaultOwned, onOpen }) {
           const count = keyCount[tier];
           return (
             <div className={`chest-card ${TIER_CLASS[tier]}`} key={tier}>
-              <div className="chest-emoji">🎁</div>
+              <ChestIdle tier={tier} size={80} />
               <div className="chest-name">Caja {TIER_LABEL[tier]}</div>
               <div className="chest-key-count"><Icon size={16} /> {count} disponibles</div>
               <button className="chest-open-btn" disabled={count <= 0} onClick={() => onOpen(tier)}>
@@ -744,14 +749,29 @@ function ChestModal({ modal, onClose }) {
       <div className="chest-modal-content" onClick={(e) => e.stopPropagation()}>
         {phase === 'opening' && (
           <>
-            <div className={`chest-anim ${TIER_CLASS[tier]}`}>🎁</div>
-            <div className="chest-anim-label">Abriendo caja {TIER_LABEL[tier]}...</div>
+            <div className={`chest-anim ${TIER_CLASS[tier]}`}>
+              <div className="scan-ring" />
+              <ChestIdle tier={tier} size={110} />
+              <div className="scan-beam" />
+            </div>
+            <div className="chest-anim-label">Escaneando caja {TIER_LABEL[tier]}...</div>
+          </>
+        )}
+        {phase === 'bursting' && (
+          <>
+            <div className={`chest-burst ${TIER_CLASS[tier]}`}>
+              <ChestBursting tier={tier} size={140} />
+            </div>
+            <div className="chest-anim-label">¡Contacto establecido!</div>
           </>
         )}
         {phase === 'silhouette' && result && (
           <>
-            <div className={`chest-silhouette ${TIER_CLASS[tier]}`}>{result.car.emoji}</div>
-            <div className="chest-anim-label">¿Qué te habrá tocado...?</div>
+            <div className={`chest-silhouette ${TIER_CLASS[tier]}`}>
+              {result.car.emoji}
+              <div className="scan-line" />
+            </div>
+            <div className="chest-anim-label">Identificando vehículo...</div>
           </>
         )}
         {phase === 'reveal' && result && (
