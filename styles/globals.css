@@ -173,6 +173,11 @@ main { max-width: 1100px; margin: 0 auto; padding: 28px 20px; }
   position: absolute; top: 8px; left: 8px; background: var(--gold); color: #1a1200;
   font-family: 'Rajdhani'; font-weight: 700; font-size: 10px; padding: 3px 7px; border-radius: 4px;
 }
+.legendary-flag {
+  position: absolute; top: 8px; left: 8px; background: linear-gradient(135deg, #c084fc, #7a2ad1); color: #fff;
+  font-family: 'Rajdhani'; font-weight: 700; font-size: 10px; padding: 3px 7px; border-radius: 4px;
+  box-shadow: 0 0 8px rgba(192,132,252,0.5);
+}
 
 .upload-panel {
   margin-top: 16px; background: var(--panel); border: 1px dashed var(--line); border-radius: 12px;
@@ -277,6 +282,86 @@ input[type=file] { display: none; }
 
 footer { text-align: center; color: var(--muted); font-size: 11px; padding: 30px 20px 10px; letter-spacing: .05em; }
 
+/* --- Cajas --- */
+.chest-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.chest-card {
+  background: var(--panel); border: 2px solid var(--line); border-radius: 16px;
+  padding: 22px 14px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px;
+}
+.chest-card.tier-common { border-color: #1f6b3a; }
+.chest-card.tier-epic { border-color: #5a2a7a; }
+.chest-card.tier-legendary { border-color: var(--gold); box-shadow: 0 0 16px rgba(224,165,58,0.2); }
+.chest-emoji { font-size: 46px; }
+.chest-name { font-family: 'Rajdhani'; font-weight: 700; font-size: 15px; }
+.chest-key-count { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; font-family: 'Rajdhani'; font-weight: 600; }
+.chest-open-btn {
+  margin-top: 6px; background: var(--accent); color: #fff; border: none; padding: 9px 22px; border-radius: 8px;
+  font-family: 'Rajdhani'; font-weight: 700; letter-spacing: 0.05em; cursor: pointer; font-size: 14px;
+}
+.chest-open-btn:disabled { background: var(--panel-2); color: var(--muted); cursor: default; }
+
+.vault-card.tier-common { border-color: #1f6b3a; }
+.vault-card.tier-epic { border-color: #5a2a7a; }
+.vault-card.tier-legendary { border-color: var(--gold); }
+.locked-icon { opacity: 0.35; }
+
+/* --- Modal de apertura de caja --- */
+.chest-modal-backdrop {
+  position: fixed; inset: 0; background: rgba(5,5,7,0.86); z-index: 100;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+  animation: fade-in .2s ease;
+}
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.chest-modal-content { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+
+.chest-anim {
+  font-size: 90px;
+  animation: chest-shake 0.35s ease-in-out infinite;
+  filter: drop-shadow(0 0 20px rgba(255,61,46,0.5));
+}
+.chest-anim.tier-common { filter: drop-shadow(0 0 22px rgba(74,222,128,0.6)); }
+.chest-anim.tier-epic { filter: drop-shadow(0 0 22px rgba(192,132,252,0.6)); }
+.chest-anim.tier-legendary { filter: drop-shadow(0 0 26px rgba(224,165,58,0.7)); }
+@keyframes chest-shake {
+  0%, 100% { transform: rotate(-8deg) scale(1); }
+  50% { transform: rotate(8deg) scale(1.05); }
+}
+.chest-anim-label { font-family: 'Rajdhani'; font-weight: 700; font-size: 16px; color: var(--muted); letter-spacing: 0.05em; }
+
+.chest-silhouette {
+  font-size: 90px;
+  filter: brightness(0) drop-shadow(0 0 26px rgba(255,255,255,0.15));
+  animation: silhouette-pulse 0.9s ease-in-out infinite;
+}
+.chest-silhouette.tier-common { filter: brightness(0) drop-shadow(0 0 26px rgba(74,222,128,0.55)); }
+.chest-silhouette.tier-epic { filter: brightness(0) drop-shadow(0 0 26px rgba(192,132,252,0.6)); }
+.chest-silhouette.tier-legendary { filter: brightness(0) drop-shadow(0 0 30px rgba(224,165,58,0.7)); }
+@keyframes silhouette-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.12); opacity: 1; }
+}
+
+.chest-reveal-card {
+  width: 220px; background: var(--panel); border: 3px solid var(--line); border-radius: 20px;
+  padding: 30px 20px; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  animation: reveal-pop .5s cubic-bezier(.2,1.5,.4,1);
+  position: relative;
+}
+.reveal-flag { top: 14px; left: 14px; }
+.chest-reveal-card.tier-common { border-color: #4ade80; box-shadow: 0 0 30px rgba(74,222,128,0.4); }
+.chest-reveal-card.tier-epic { border-color: #c084fc; box-shadow: 0 0 30px rgba(192,132,252,0.45); }
+.chest-reveal-card.tier-legendary { border-color: var(--gold); box-shadow: 0 0 40px rgba(224,165,58,0.55); }
+@keyframes reveal-pop {
+  0% { transform: scale(0.3) rotate(-10deg); opacity: 0; }
+  70% { transform: scale(1.08) rotate(2deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0); }
+}
+.chest-reveal-emoji { font-size: 54px; }
+.chest-reveal-name { font-family: 'Rajdhani'; font-weight: 700; font-size: 18px; margin-top: 4px; }
+.chest-reveal-brand { color: var(--muted); font-size: 13px; }
+.chest-reveal-tier { margin-top: 8px; font-family: 'Rajdhani'; font-weight: 700; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold); }
+.chest-dup-note { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; font-family: 'Rajdhani'; font-weight: 600; }
+
 /* --- Login --- */
 .auth-wrap {
   max-width: 380px; margin: 60px auto; background: var(--panel); border: 1px solid var(--line);
@@ -309,5 +394,6 @@ footer { text-align: center; color: var(--muted); font-size: 11px; padding: 30px
 @media (max-width: 460px) {
   .brand-grid { grid-template-columns: repeat(2, 1fr); }
   .model-grid { grid-template-columns: 1fr 1fr; }
+  .chest-grid { grid-template-columns: 1fr; }
   header { padding: 12px; }
 }

@@ -5,6 +5,8 @@ import { BRANDS, MODELS, ICONIC_LINKS, ICONIC_EXTRA } from '../lib/carsData';
 import { grantCarXp, grantXp, xpNeededForLevel, rewardForLevel } from '../lib/xpSystem';
 import { CoinIcon, KeyCommonIcon, KeyEpicIcon, KeyLegendaryIcon, LockIcon, CheckIcon } from '../lib/icons';
 import { MISSIONS } from '../lib/missions';
+import { compressImage } from '../lib/imageCompress';
+import { VAULT_CARS, poolByTier, findVaultCar, DUPLICATE_COMPENSATION } from '../lib/vaultCars';
 
 export default function Home() {
   const [session, setSession] = useState(undefined); // undefined = cargando, null = sin sesión
@@ -91,12 +93,62 @@ function App({ session }) {
   const [profile, setProfile] = useState(null); // { level, xp, coins, keys_common, keys_epic, keys_legendary }
   const [rewardToast, setRewardToast] = useState(null); // { xpGained, levelUps }
   const [claimedMissions, setClaimedMissions] = useState({}); // { missionId: true }
+  const [vaultOwned, setVaultOwned] = useState({}); // { carId: true }
+  const [chestModal, setChestModal] = useState(null); // { tier, phase: 'opening'|'reveal', result }
 
   useEffect(() => {
     loadGarage();
     loadProfile();
     loadClaimedMissions();
+    loadVault();
   }, []);
+
+  async function loadVault() {
+    const { data, error } = await supabase
+      .from('vault_cars')
+      .select('car_id')
+      .eq('user_id', user.id);
+    if (!error && data) {
+      const map = {};
+      data.forEach(row => { map[row.car_id] = true; });
+      setVaultOwned(map);
+    }
+  }
+
+  async function openChest(tier) {
+    if (!profile) return;
+    const keyField = tier === 'common' ? 'keys_common' : tier === 'epic' ? 'keys_epic' : 'keys_legendary';
+    if (profile[keyField] <= 0) return;
+
+    setChestModal({ tier, phase: 'opening', result: null });
+
+    const pool = poolByTier(tier);
+    const notOwned = pool.filter(c => !vaultOwned[c.id]);
+    const candidates = notOwned.length > 0 ? notOwned : pool;
+    const car = candidates[Math.floor(Math.random() * candidates.length)];
+    const isDuplicate = !!vaultOwned[car.id];
+    const coinsGained = isDuplicate ? DUPLICATE_COMPENSATION[tier] : 0;
+
+    const newProfile = { ...profile, [keyField]: profile[keyField] - 1, coins: profile.coins + coinsGained };
+    setProfile(newProfile);
+    await supabase
+      .from('profiles')
+      .update({ [keyField]: newProfile[keyField], coins: newProfile.coins })
+      .eq('user_id', user.id);
+
+    if (!isDuplicate) {
+      await supabase.from('vault_cars').insert({ user_id: user.id, car_id: car.id });
+      setVaultOwned(prev => ({ ...prev, [car.id]: true }));
+    }
+
+    setTimeout(() => {
+      setChestModal({ tier, phase: 'silhouette', result: { car, isDuplicate, coinsGained } });
+    }, 1300);
+
+    setTimeout(() => {
+      setChestModal({ tier, phase: 'reveal', result: { car, isDuplicate, coinsGained } });
+    }, 2400);
+  }
 
   async function loadClaimedMissions() {
     const { data, error } = await supabase
@@ -205,12 +257,12 @@ function App({ session }) {
     const yaLoTenias = !!garage[model.id]; // si ya lo tenías, no vuelve a dar XP, solo actualiza la foto
     setUploading(true);
     try {
-      const ext = file.name.split('.').pop();
-      const path = `${user.id}/${model.id}-${Date.now()}.${ext}`;
+      const compressed = await compressImage(file); // reduce el peso ~90% antes de subir
+      const path = `${user.id}/${model.id}-${Date.now()}.jpg`;
 
       const { error: uploadError } = await supabase.storage
         .from('car-photos')
-        .upload(path, file, { upsert: true });
+        .upload(path, compressed, { upsert: true, contentType: 'image/jpeg' });
       if (uploadError) throw uploadError;
 
       const { data: publicUrlData } = supabase.storage.from('car-photos').getPublicUrl(path);
@@ -251,6 +303,7 @@ function App({ session }) {
         <nav>
           <button className={view === 'marcas' ? 'active' : ''} onClick={() => { setView('marcas'); }}>Marcas</button>
           <button className={view === 'misiones' ? 'active' : ''} onClick={() => { setView('misiones'); goBrandsRoot(); }}>Misiones</button>
+          <button className={view === 'cajas' ? 'active' : ''} onClick={() => { setView('cajas'); goBrandsRoot(); }}>Cajas</button>
           <button className={view === 'iconicos' ? 'active' : ''} onClick={() => { setView('iconicos'); goBrandsRoot(); }}>Icónicos</button>
           <button className={view === 'garaje' ? 'active' : ''} onClick={() => { setView('garaje'); goBrandsRoot(); }}>Garaje</button>
         </nav>
@@ -262,6 +315,7 @@ function App({ session }) {
 
       {profile && <Hud profile={profile} onOpenProgress={() => { setView('progreso'); goBrandsRoot(); }} />}
       {rewardToast && <RewardToast toast={rewardToast} />}
+      {chestModal && <ChestModal modal={chestModal} onClose={() => setChestModal(null)} />}
 
       <main>
         {view === 'marcas' && !currentBrand && <BrandsView onSelectBrand={goBrand} />}
@@ -280,6 +334,9 @@ function App({ session }) {
         {view === 'progreso' && profile && <ProgresoView profile={profile} onBack={() => setView('marcas')} />}
         {view === 'misiones' && (
           <MisionesView garage={garage} claimedMissions={claimedMissions} onClaim={claimMission} />
+        )}
+        {view === 'cajas' && profile && (
+          <CajasView profile={profile} vaultOwned={vaultOwned} onOpen={openChest} />
         )}
         {view === 'garaje' && <GarajeView garage={garage} />}
       </main>
@@ -550,6 +607,98 @@ function MisionesView({ garage, claimedMissions, onClaim }) {
         })}
       </div>
     </>
+  );
+}
+
+/* ---------------- CAJAS ---------------- */
+const TIER_LABEL = { common: 'Turbocomún', epic: 'Turboépica', legendary: 'Turbolegendaria' };
+const TIER_ICON = { common: KeyCommonIcon, epic: KeyEpicIcon, legendary: KeyLegendaryIcon };
+const TIER_CLASS = { common: 'tier-common', epic: 'tier-epic', legendary: 'tier-legendary' };
+
+function CajasView({ profile, vaultOwned, onOpen }) {
+  const keyCount = { common: profile.keys_common, epic: profile.keys_epic, legendary: profile.keys_legendary };
+  return (
+    <>
+      <div className="section-title">
+        <span className="num">🎁</span><h2>Cajas</h2>
+        <p>Gasta tus llaves para conseguir coches especiales</p>
+      </div>
+      <div className="chest-grid">
+        {['common', 'epic', 'legendary'].map((tier) => {
+          const Icon = TIER_ICON[tier];
+          const count = keyCount[tier];
+          return (
+            <div className={`chest-card ${TIER_CLASS[tier]}`} key={tier}>
+              <div className="chest-emoji">🎁</div>
+              <div className="chest-name">Caja {TIER_LABEL[tier]}</div>
+              <div className="chest-key-count"><Icon size={16} /> {count} disponibles</div>
+              <button className="chest-open-btn" disabled={count <= 0} onClick={() => onOpen(tier)}>
+                Abrir
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="section-title" style={{ marginTop: 34 }}>
+        <span className="num">🗃️</span><h2>Tu colección</h2>
+        <p>{Object.keys(vaultOwned).length}/{VAULT_CARS.length} conseguidos</p>
+      </div>
+      <div className="model-grid">
+        {VAULT_CARS.map((c) => {
+          const owned = !!vaultOwned[c.id];
+          return (
+            <div className={`model-card vault-card ${TIER_CLASS[c.tier]}`} key={c.id}>
+              <div className="model-photo">
+                {c.tier === 'legendary' && owned && <div className="legendary-flag">LEGENDARIO</div>}
+                <div className={owned ? 'placeholder-icon' : 'placeholder-icon locked-icon'}>{owned ? c.emoji : '🔒'}</div>
+              </div>
+              <div className="model-info">
+                <div className="name">{owned ? c.name : '???'}</div>
+                <div className="chassis">{owned ? c.brand : TIER_LABEL[c.tier]}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+function ChestModal({ modal, onClose }) {
+  const { tier, phase, result } = modal;
+  return (
+    <div className="chest-modal-backdrop" onClick={phase === 'reveal' ? onClose : undefined}>
+      <div className="chest-modal-content" onClick={(e) => e.stopPropagation()}>
+        {phase === 'opening' && (
+          <>
+            <div className={`chest-anim ${TIER_CLASS[tier]}`}>🎁</div>
+            <div className="chest-anim-label">Abriendo caja {TIER_LABEL[tier]}...</div>
+          </>
+        )}
+        {phase === 'silhouette' && result && (
+          <>
+            <div className={`chest-silhouette ${TIER_CLASS[tier]}`}>{result.car.emoji}</div>
+            <div className="chest-anim-label">¿Qué te habrá tocado...?</div>
+          </>
+        )}
+        {phase === 'reveal' && result && (
+          <>
+            <div className={`chest-reveal-card ${TIER_CLASS[result.car.tier]}`}>
+              {result.car.tier === 'legendary' && <div className="legendary-flag reveal-flag">LEGENDARIO</div>}
+              <div className="chest-reveal-emoji">{result.car.emoji}</div>
+              <div className="chest-reveal-name">{result.car.name}</div>
+              <div className="chest-reveal-brand">{result.car.brand}</div>
+              <div className="chest-reveal-tier">{TIER_LABEL[result.car.tier]}</div>
+            </div>
+            {result.isDuplicate && (
+              <div className="chest-dup-note">Ya lo tenías: <CoinIcon size={15} /> +{result.coinsGained} monedas</div>
+            )}
+            <button className="chest-open-btn" onClick={onClose}>Genial</button>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
