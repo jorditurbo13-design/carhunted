@@ -361,6 +361,19 @@ footer { text-align: center; color: var(--muted); font-size: 11px; padding: 30px
 .chest-reveal-brand { color: var(--muted); font-size: 13px; }
 .chest-reveal-tier { margin-top: 8px; font-family: 'Rajdhani'; font-weight: 700; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold); }
 .chest-dup-note { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; font-family: 'Rajdhani'; font-weight: 600; }
+.chest-note {
+  margin-top: 24px; text-align: center; color: var(--muted); font-size: 13px;
+  border: 1px dashed var(--line); border-radius: 10px; padding: 12px;
+}
+.chest-note b { color: var(--text); }
+
+/* --- Concesionario --- */
+.dealer-section-h { font-family: 'Rajdhani'; font-weight: 700; font-size: 19px; margin-bottom: 4px; }
+.dealer-section-sub { color: var(--muted); font-size: 12px; margin-bottom: 14px; }
+.dealer-need {
+  display: flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 10px;
+  color: var(--muted); font-family: 'Rajdhani'; font-weight: 600;
+}
 
 /* --- Login --- */
 .auth-wrap {

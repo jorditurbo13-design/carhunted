@@ -304,6 +304,7 @@ function App({ session }) {
           <button className={view === 'marcas' ? 'active' : ''} onClick={() => { setView('marcas'); }}>Marcas</button>
           <button className={view === 'misiones' ? 'active' : ''} onClick={() => { setView('misiones'); goBrandsRoot(); }}>Misiones</button>
           <button className={view === 'cajas' ? 'active' : ''} onClick={() => { setView('cajas'); goBrandsRoot(); }}>Cajas</button>
+          <button className={view === 'concesionario' ? 'active' : ''} onClick={() => { setView('concesionario'); goBrandsRoot(); }}>Concesionario</button>
           <button className={view === 'iconicos' ? 'active' : ''} onClick={() => { setView('iconicos'); goBrandsRoot(); }}>Icónicos</button>
           <button className={view === 'garaje' ? 'active' : ''} onClick={() => { setView('garaje'); goBrandsRoot(); }}>Garaje</button>
         </nav>
@@ -338,6 +339,7 @@ function App({ session }) {
         {view === 'cajas' && profile && (
           <CajasView profile={profile} vaultOwned={vaultOwned} onOpen={openChest} />
         )}
+        {view === 'concesionario' && <ConcesionarioView vaultOwned={vaultOwned} />}
         {view === 'garaje' && <GarajeView garage={garage} />}
       </main>
 
@@ -640,27 +642,52 @@ function CajasView({ profile, vaultOwned, onOpen }) {
         })}
       </div>
 
-      <div className="section-title" style={{ marginTop: 34 }}>
-        <span className="num">🗃️</span><h2>Tu colección</h2>
-        <p>{Object.keys(vaultOwned).length}/{VAULT_CARS.length} conseguidos</p>
+      <div className="chest-note">
+        Consigue coches de verdad en el <b>Concesionario</b>: mira ahí qué llave necesitas para cada uno.
       </div>
-      <div className="model-grid">
-        {VAULT_CARS.map((c) => {
-          const owned = !!vaultOwned[c.id];
-          return (
-            <div className={`model-card vault-card ${TIER_CLASS[c.tier]}`} key={c.id}>
-              <div className="model-photo">
-                {c.tier === 'legendary' && owned && <div className="legendary-flag">LEGENDARIO</div>}
-                <div className={owned ? 'placeholder-icon' : 'placeholder-icon locked-icon'}>{owned ? c.emoji : '🔒'}</div>
-              </div>
-              <div className="model-info">
-                <div className="name">{owned ? c.name : '???'}</div>
-                <div className="chassis">{owned ? c.brand : TIER_LABEL[c.tier]}</div>
-              </div>
-            </div>
-          );
-        })}
+    </>
+  );
+}
+
+/* ---------------- CONCESIONARIO: 2 secciones (VGT de marcas / marcas inventadas) ---------------- */
+function ConcesionarioView({ vaultOwned }) {
+  const vgtCars = VAULT_CARS.filter(c => c.tier === 'common' || c.tier === 'epic');
+  const legendaryCars = VAULT_CARS.filter(c => c.tier === 'legendary');
+
+  function renderCar(c) {
+    const owned = !!vaultOwned[c.id];
+    const Icon = TIER_ICON[c.tier];
+    return (
+      <div className={`model-card vault-card ${TIER_CLASS[c.tier]}`} key={c.id}>
+        <div className="model-photo">
+          {c.tier === 'legendary' && owned && <div className="legendary-flag">LEGENDARIO</div>}
+          <div className={owned ? 'placeholder-icon' : 'placeholder-icon locked-icon'}>{owned ? c.emoji : '🔒'}</div>
+        </div>
+        <div className="model-info">
+          <div className="name">{owned ? c.name : '???'}</div>
+          <div className="chassis">{owned ? c.brand : ''}</div>
+          {!owned && (
+            <div className="dealer-need"><Icon size={13} /> {TIER_LABEL[c.tier]}</div>
+          )}
+        </div>
       </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="section-title">
+        <span className="num">🏪</span><h2>Concesionario</h2>
+        <p>Coches especiales que no se cazan por la calle</p>
+      </div>
+
+      <h3 className="dealer-section-h">Ediciones VGT de marcas reales</h3>
+      <p className="dealer-section-sub">Conceptos de fantasía de marcas que ya conoces. Se consiguen con llaves turbocomunes y turboépicas.</p>
+      <div className="model-grid">{vgtCars.map(renderCar)}</div>
+
+      <h3 className="dealer-section-h" style={{ marginTop: 34 }}>Marcas inventadas</h3>
+      <p className="dealer-section-sub">Marcas 100% de fantasía, imposibles de encontrar en el concesionario normal. Solo con llaves turbolegendarias.</p>
+      <div className="model-grid">{legendaryCars.map(renderCar)}</div>
     </>
   );
 }
