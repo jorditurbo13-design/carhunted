@@ -57,6 +57,8 @@ nav button:hover { color: var(--text); border-color: var(--chrome); }
   padding: 6px 12px; border-radius: 16px; cursor: pointer; font-family: 'Rajdhani'; font-weight: 600;
 }
 .userbox button:hover { color: var(--text); border-color: var(--accent); }
+.avatar-btn { padding: 2px !important; border-radius: 50% !important; border: none !important; background: none !important; }
+.avatar-btn:hover { filter: brightness(1.15); }
 
 /* --- HUD (monedas, llaves, XP) --- */
 .hud {
@@ -374,6 +376,17 @@ footer { text-align: center; color: var(--muted); font-size: 11px; padding: 30px
   display: flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 10px;
   color: var(--muted); font-family: 'Rajdhani'; font-weight: 600;
 }
+
+/* --- Perfil --- */
+.profile-current { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.profile-current-level { font-family: 'Rajdhani'; font-weight: 700; font-size: 16px; color: var(--gold); }
+.avatar-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; max-width: 340px; }
+.avatar-pick {
+  aspect-ratio: 1; border-radius: 50%; border: 3px solid var(--line); cursor: pointer;
+  font-size: 26px; display: flex; align-items: center; justify-content: center; transition: .15s;
+}
+.avatar-pick:hover { transform: scale(1.08); }
+.avatar-pick.selected { border-color: var(--gold); box-shadow: 0 0 12px rgba(224,165,58,0.5); }
 
 /* --- Login --- */
 .auth-wrap {

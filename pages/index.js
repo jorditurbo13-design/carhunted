@@ -7,6 +7,7 @@ import { CoinIcon, KeyCommonIcon, KeyEpicIcon, KeyLegendaryIcon, LockIcon, Check
 import { MISSIONS } from '../lib/missions';
 import { compressImage } from '../lib/imageCompress';
 import { VAULT_CARS, poolByTier, findVaultCar, DUPLICATE_COMPENSATION } from '../lib/vaultCars';
+import { AVATARS, findAvatar } from '../lib/avatars';
 
 export default function Home() {
   const [session, setSession] = useState(undefined); // undefined = cargando, null = sin sesión
@@ -95,6 +96,7 @@ function App({ session }) {
   const [claimedMissions, setClaimedMissions] = useState({}); // { missionId: true }
   const [vaultOwned, setVaultOwned] = useState({}); // { carId: true }
   const [chestModal, setChestModal] = useState(null); // { tier, phase: 'opening'|'reveal', result }
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   useEffect(() => {
     loadGarage();
@@ -162,6 +164,38 @@ function App({ session }) {
     }
   }
 
+  async function chooseAvatar(avatarId) {
+    if (!profile) return;
+    setProfile({ ...profile, avatar_id: avatarId, avatar_photo_url: null });
+    await supabase
+      .from('profiles')
+      .update({ avatar_id: avatarId, avatar_photo_url: null })
+      .eq('user_id', user.id);
+  }
+
+  async function uploadAvatarPhoto(file) {
+    if (!profile) return;
+    setUploadingAvatar(true);
+    try {
+      const compressed = await compressImage(file, { maxDim: 400, quality: 0.8 });
+      const path = `${user.id}/avatar-${Date.now()}.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from('car-photos')
+        .upload(path, compressed, { upsert: true, contentType: 'image/jpeg' });
+      if (uploadError) throw uploadError;
+
+      const { data: publicUrlData } = supabase.storage.from('car-photos').getPublicUrl(path);
+      const photoUrl = publicUrlData.publicUrl;
+
+      setProfile({ ...profile, avatar_photo_url: photoUrl });
+      await supabase.from('profiles').update({ avatar_photo_url: photoUrl }).eq('user_id', user.id);
+    } catch (err) {
+      alert('No se pudo subir la foto de perfil: ' + err.message);
+    } finally {
+      setUploadingAvatar(false);
+    }
+  }
+
   async function claimMission(mission) {
     if (!profile || claimedMissions[mission.id]) return;
     const { error: insertError } = await supabase
@@ -180,7 +214,7 @@ function App({ session }) {
     const keys_epic = result.keys_epic + r.keys_epic;
     const keys_legendary = result.keys_legendary + r.keys_legendary;
 
-    setProfile({ level, xp, coins, keys_common, keys_epic, keys_legendary, avatar_id: profile.avatar_id });
+    setProfile({ ...profile, level, xp, coins, keys_common, keys_epic, keys_legendary });
     await supabase
       .from('profiles')
       .update({ level, xp, coins, keys_common, keys_epic, keys_legendary })
@@ -207,7 +241,7 @@ function App({ session }) {
   async function loadProfile() {
     const { data, error } = await supabase
       .from('profiles')
-      .select('level, xp, coins, keys_common, keys_epic, keys_legendary, avatar_id')
+      .select('level, xp, coins, keys_common, keys_epic, keys_legendary, avatar_id, avatar_photo_url')
       .eq('user_id', user.id)
       .single();
     if (!error && data) {
@@ -217,7 +251,7 @@ function App({ session }) {
       const { data: created } = await supabase
         .from('profiles')
         .insert({ user_id: user.id })
-        .select('level, xp, coins, keys_common, keys_epic, keys_legendary, avatar_id')
+        .select('level, xp, coins, keys_common, keys_epic, keys_legendary, avatar_id, avatar_photo_url')
         .single();
       if (created) setProfile(created);
     }
@@ -227,7 +261,7 @@ function App({ session }) {
     if (!profile) return;
     const result = grantCarXp(profile, isIconic);
     const { level, xp, coins, keys_common, keys_epic, keys_legendary, xpGained, levelUps } = result;
-    setProfile({ level, xp, coins, keys_common, keys_epic, keys_legendary, avatar_id: profile.avatar_id });
+    setProfile({ ...profile, level, xp, coins, keys_common, keys_epic, keys_legendary });
     await supabase
       .from('profiles')
       .update({ level, xp, coins, keys_common, keys_epic, keys_legendary })
@@ -309,7 +343,9 @@ function App({ session }) {
           <button className={view === 'garaje' ? 'active' : ''} onClick={() => { setView('garaje'); goBrandsRoot(); }}>Garaje</button>
         </nav>
         <div className="userbox">
-          <span>{user.email}</span>
+          <button className="avatar-btn" onClick={() => { setView('perfil'); goBrandsRoot(); }} title="Tu perfil">
+            <AvatarBadge profile={profile} size={30} />
+          </button>
           <button onClick={handleLogout}>Salir</button>
         </div>
       </header>
@@ -340,6 +376,15 @@ function App({ session }) {
           <CajasView profile={profile} vaultOwned={vaultOwned} onOpen={openChest} />
         )}
         {view === 'concesionario' && <ConcesionarioView vaultOwned={vaultOwned} />}
+        {view === 'perfil' && profile && (
+          <PerfilView
+            user={user}
+            profile={profile}
+            onChooseAvatar={chooseAvatar}
+            onUploadPhoto={uploadAvatarPhoto}
+            uploading={uploadingAvatar}
+          />
+        )}
         {view === 'garaje' && <GarajeView garage={garage} />}
       </main>
 
@@ -726,6 +771,83 @@ function ChestModal({ modal, onClose }) {
         )}
       </div>
     </div>
+  );
+}
+
+/* ---------------- AVATAR / PERFIL ---------------- */
+function AvatarBadge({ profile, size = 30 }) {
+  if (profile?.avatar_photo_url) {
+    return (
+      <img
+        src={profile.avatar_photo_url}
+        alt="Tu avatar"
+        style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--gold)' }}
+      />
+    );
+  }
+  const avatar = findAvatar(profile?.avatar_id);
+  return (
+    <div
+      style={{
+        width: size, height: size, borderRadius: '50%',
+        background: `linear-gradient(135deg, ${avatar.colors[0]}, ${avatar.colors[1]})`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: size * 0.55, border: '2px solid var(--line)', flexShrink: 0,
+      }}
+    >
+      {avatar.emoji}
+    </div>
+  );
+}
+
+function PerfilView({ user, profile, onChooseAvatar, onUploadPhoto, uploading }) {
+  function handleFileChange(e) {
+    const file = e.target.files[0];
+    if (file) onUploadPhoto(file);
+    e.target.value = '';
+  }
+
+  return (
+    <>
+      <div className="section-title">
+        <span className="num">👤</span><h2>Tu perfil</h2>
+        <p>{user.email}</p>
+      </div>
+
+      <div className="profile-current">
+        <AvatarBadge profile={profile} size={90} />
+        <div className="profile-current-level">Nivel {profile.level}</div>
+      </div>
+
+      <h3 className="dealer-section-h" style={{ marginTop: 26 }}>Elige un avatar</h3>
+      <div className="avatar-grid">
+        {AVATARS.map((a) => {
+          const selected = !profile.avatar_photo_url && profile.avatar_id === a.id;
+          return (
+            <button
+              key={a.id}
+              className={`avatar-pick ${selected ? 'selected' : ''}`}
+              onClick={() => onChooseAvatar(a.id)}
+              style={{ background: `linear-gradient(135deg, ${a.colors[0]}, ${a.colors[1]})` }}
+            >
+              {a.emoji}
+            </button>
+          );
+        })}
+      </div>
+
+      <h3 className="dealer-section-h" style={{ marginTop: 26 }}>O sube tu propia foto</h3>
+      <div className="upload-panel">
+        <div className="txt">
+          <div className="t">Foto de perfil</div>
+          <div className="s">Se recorta en redondo automáticamente</div>
+        </div>
+        <div>
+          <label className="upload-btn" htmlFor="avatarFileInput">{uploading ? 'Subiendo...' : 'Subir foto'}</label>
+          <input id="avatarFileInput" type="file" accept="image/*" disabled={uploading} onChange={handleFileChange} />
+        </div>
+      </div>
+    </>
   );
 }
 
